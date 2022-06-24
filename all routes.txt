@@ -1,0 +1,6 @@
+/ => will take a git req
+/user
+    /all_users - get all the users  
+    /registration - post 
+    /login
+
