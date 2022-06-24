@@ -22,6 +22,8 @@ router.post("/address", tokenVerify, addressVerify, UserController.address);
 router.delete("/address", tokenVerify, UserController.deleteAddress);
 router.post("/forget-password", emailVerify, UserController.forgetPassword);
 router.post("/forget-password/reset", resetTokenValidate, loginDetailsValidatorWithEmail, UserController.forgetPasswordReset);
+router.post("/password-reset",UserController.passwordResetThroughEmailLink);
+router.get("/password-reset", UserController.passwordResetNext);
 router.post("/profile-image", tokenVerify, upload.single("avatar"), FileuploadController.uploadPhoto);
 router.get("/profile-image", tokenVerify, FileuploadController.getPhoto);
 router.post("/profile-image-remote", tokenVerify, upload.single("avatar"), FileuploadController.uploadPhotoRemote);

@@ -21,7 +21,7 @@ const registerUser = async (req, res, next) => {
             .pattern(new RegExp('^[a-zA-Z0-9]{3,30}$')),
         confirmPassword: Joi.ref('password'),
         email: Joi.string()
-            .email({ minDomainSegments: 2, tlds: { allow: ['com', 'net'] } })
+            .email({ minDomainSegments: 2, tlds: { allow: ['com', 'net','in'] } })
     });
     const { error } = schema.validate(req.body);
     if (error)

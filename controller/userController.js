@@ -2,12 +2,18 @@ const { User, Address } = require("../database");
 const bcrypt = require("bcrypt");
 const { exist } = require("joi");
 const CustomError = require("../error/CustomError");
-const { access_token } = require("../auth/token");
+const { access_token, check_token } = require("../auth/token");
 const Joi = require("joi");
 const Token = require("../database/model/Token");
-const saltRounds = 10;
+const { email, username, password } = require("../config");
+const nodemailer = require("nodemailer");
+const { saltRounds } = require('../config');
+var rand = require("random-key");
+const ResetPassword = require("../database/model/ResetPassword");
+
 class UserController {
     static async register(req, res, next) {
+        console.log(typeof saltRounds);
         const { username, firstName, lastName, email, password } = req.body;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
         const user = new User({
@@ -149,7 +155,7 @@ class UserController {
         try {
             user = await User.findOne({ email: req.body.email }, "-password -__v");
         } catch (e) {
-            return next(e); 
+            return next(e);
         }
         if (!user)
             return next(CustomError.unauthorized("this user doesn't exist"));
@@ -161,7 +167,7 @@ class UserController {
         try {
             const saveToken = await Token({ token, email: user.email }).save();
         } catch (e) {
-            console.log(e,'=======')
+            console.log(e, '=======')
             return next(e);
         }
         // res.header({token:token});
@@ -174,13 +180,79 @@ class UserController {
         console.log(req.resetPassword)
         const hashedPassword = await bcrypt.hash(req.body.reset_password, saltRounds);
         const updatePassword = await User.findOneAndUpdate({ email: req.resetPassword.validate.email }, { password: hashedPassword });
-        const deleteAllTokens = await Token.deleteMany({ email: req.resetPassword.validate.email})
+        const deleteAllTokens = await Token.deleteMany({ email: req.resetPassword.validate.email })
         console.log(updatePassword);
         res.json({ update: "done" });
     }
 
-    static async photoUpload(req, res, next){
-        
+    static async passwordResetThroughEmailLink(req, res, next) {
+        const user = await User.exists({ email: req.body.email });
+        if (!user)
+            return next(CustomError.unauthorized("user is not found"));
+        const tempPassword = rand.generateDigits(8);
+        console.log(saltRounds);
+        const reset_token = await access_token({
+            email: req.body.email,
+            resetPassword: await bcrypt.hash(tempPassword, 10)
+        }, 600);
+        const resetPassword = await ResetPassword({
+            email: req.body.email,
+            token: reset_token,
+            password: tempPassword,
+        }).save();
+        //will send the new password to user 
+        EmailSendMain(reset_token, req.body.email).catch(console.error);
+        res.json({ ok: "ok" })
+    }
+    static async passwordResetNext(req, res, next) {
+        const resetToken = req.query.token;
+        let validate = null;
+        try {
+            validate = await check_token(resetToken);
+            console.log(validate);
+        } catch (err) {
+            return next(err);
+        }
+        const verifyInDB = await ResetPassword.findOne({ token: resetToken });
+        if (!verifyInDB)
+            return next(CustomError.unauthorized("Access Denied"));
+
+        const validatePassword = await bcrypt.compare(verifyInDB.password, validate.resetPassword)
+
+        if (validatePassword) {
+            const newPassword = rand.generate(8);
+            const hashedPassword = await bcrypt.hash(newPassword, 10);
+            const updateIntoMain = await User.updateOne({ email: validate.email }, { password: hashedPassword });
+            const deleteEverythingInPasswordResetDb = await ResetPassword.deleteMany({ email: validate.email });
+            EmailSendMain()
+            res.json({ newPassword });
+        } else {
+            res.next(CustomError.unauthorized("unauthorized web page"));
+        }
+        console.log(validatePassword);
+
+        console.log(verifyInDB);
+
     }
 }
+
+
+const EmailSendMain = async (token, recevier) => {
+    let transporter = nodemailer.createTransport({
+        host: "smtp.office365.com",
+        port: 587,
+        auth: {
+            user: email,
+            pass: password,
+        },
+    });
+    let info = await transporter.sendMail({
+        from: '"Test Rest API" <superbatnode@outlook.com>', // sender address
+        to: recevier, // list of receivers
+        subject: "Reset Your Password", // Subject line
+        html: `<b>Reset  Your Password Here</b><br><a href="http://localhost:5000/user/password-reset?token=${token}">Click Me</a>`, // html body
+    });
+    console.log("Message sent: %s", info.messageId);
+}
+
 module.exports = UserController; 
