@@ -13,6 +13,9 @@ class CustomError extends Error{
     static unauthorized(msg="unauthorized user"){
         return new CustomError(401, msg);
     }
+    static internalServerErrror(msg="Internal Server Error"){
+        return new CustomError(500, msg);
+    }
 
 }
 module.exports = CustomError;
